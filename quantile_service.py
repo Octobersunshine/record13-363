@@ -1,0 +1,104 @@
+import numpy as np
+from typing import List, Union, Optional
+
+
+class QuantileService:
+    def __init__(self):
+        self._valid_methods = {"linear", "midpoint", "nearest"}
+
+    def _validate_inputs(
+        self,
+        data: Union[List[float], np.ndarray],
+        quantiles: Union[float, List[float], np.ndarray],
+        method: str,
+    ) -> None:
+        if method not in self._valid_methods:
+            raise ValueError(
+                f"Invalid interpolation method '{method}'. "
+                f"Must be one of: {', '.join(sorted(self._valid_methods))}"
+            )
+
+        if len(data) == 0:
+            raise ValueError("Data sequence cannot be empty")
+
+        if isinstance(quantiles, (list, np.ndarray)):
+            quantiles_arr = np.asarray(quantiles, dtype=float)
+            if quantiles_arr.size == 0:
+                raise ValueError("Quantiles list cannot be empty")
+            if np.any((quantiles_arr < 0) | (quantiles_arr > 1)):
+                raise ValueError("All quantiles must be in the range [0, 1]")
+        else:
+            q = float(quantiles)
+            if q < 0 or q > 1:
+                raise ValueError("Quantile must be in the range [0, 1]")
+
+    def compute(
+        self,
+        data: Union[List[float], np.ndarray],
+        quantiles: Union[float, List[float], np.ndarray],
+        method: str = "linear",
+    ) -> Union[float, np.ndarray]:
+        self._validate_inputs(data, quantiles, method)
+
+        data_arr = np.asarray(data, dtype=float)
+        sorted_data = np.sort(data_arr)
+
+        if method == "linear":
+            return self._linear_interpolation(sorted_data, quantiles)
+        elif method == "midpoint":
+            return self._midpoint_interpolation(sorted_data, quantiles)
+        elif method == "nearest":
+            return self._nearest_interpolation(sorted_data, quantiles)
+
+    def _get_positions(self, sorted_data: np.ndarray, quantiles) -> np.ndarray:
+        n = len(sorted_data)
+        quantiles_arr = np.atleast_1d(np.asarray(quantiles, dtype=float))
+        positions = quantiles_arr * (n - 1)
+        return positions
+
+    def _linear_interpolation(self, sorted_data: np.ndarray, quantiles) -> np.ndarray:
+        positions = self._get_positions(sorted_data, quantiles)
+        lower_idx = np.floor(positions).astype(int)
+        upper_idx = np.ceil(positions).astype(int)
+        frac = positions - lower_idx
+
+        lower_vals = sorted_data[lower_idx]
+        upper_vals = sorted_data[upper_idx]
+
+        result = lower_vals + frac * (upper_vals - lower_vals)
+
+        if result.size == 1 and not isinstance(quantiles, (list, np.ndarray)):
+            return float(result[0])
+        return result
+
+    def _midpoint_interpolation(self, sorted_data: np.ndarray, quantiles) -> np.ndarray:
+        positions = self._get_positions(sorted_data, quantiles)
+        lower_idx = np.floor(positions).astype(int)
+        upper_idx = np.ceil(positions).astype(int)
+
+        lower_vals = sorted_data[lower_idx]
+        upper_vals = sorted_data[upper_idx]
+
+        result = (lower_vals + upper_vals) / 2.0
+
+        if result.size == 1 and not isinstance(quantiles, (list, np.ndarray)):
+            return float(result[0])
+        return result
+
+    def _nearest_interpolation(self, sorted_data: np.ndarray, quantiles) -> np.ndarray:
+        positions = self._get_positions(sorted_data, quantiles)
+        nearest_idx = np.round(positions).astype(int)
+        result = sorted_data[nearest_idx]
+
+        if result.size == 1 and not isinstance(quantiles, (list, np.ndarray)):
+            return float(result[0])
+        return result
+
+
+def compute_quantile(
+    data: Union[List[float], np.ndarray],
+    quantiles: Union[float, List[float], np.ndarray],
+    method: str = "linear",
+) -> Union[float, np.ndarray]:
+    service = QuantileService()
+    return service.compute(data, quantiles, method)
