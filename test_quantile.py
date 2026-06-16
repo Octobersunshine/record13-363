@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from quantile_service import QuantileService, compute_quantile
 
@@ -140,6 +141,47 @@ def test_interpolation_demonstration():
     print(f"  nearest: round(2.4)=2, 值=5")
 
 
+def test_small_sample():
+    print("\n" + "=" * 60)
+    print("测试7: 小样本 (n < 2) 分位数计算")
+    print("=" * 60)
+
+    qs = QuantileService()
+
+    print("\n--- n=1: 单元素数据 ---")
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = qs.compute([42], 0.5, method="linear")
+        assert len(w) == 1
+        assert "Sample size is 1" in str(w[0].message)
+        assert result == 42.0
+        print(f"  单分位点 q=0.5: {result} (预期 42.0) ✓")
+        print(f"  警告信息: {w[0].message} ✓")
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        results = qs.compute([42], [0.25, 0.5, 0.75], method="linear")
+        assert len(w) == 1
+        assert np.all(results == 42.0)
+        print(f"  多分位点 [0.25,0.5,0.75]: {results} (预期全为 42.0) ✓")
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = qs.compute([7], 0.5, method="midpoint")
+        assert len(w) == 1
+        assert result == 7.0
+        print(f"  midpoint 方法 q=0.5: {result} (预期 7.0) ✓")
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = qs.compute([7], 0.5, method="nearest")
+        assert len(w) == 1
+        assert result == 7.0
+        print(f"  nearest 方法 q=0.5: {result} (预期 7.0) ✓")
+
+    print("\n✓ 小样本测试通过")
+
+
 if __name__ == "__main__":
     test_basic_quantiles()
     test_single_quantile()
@@ -147,6 +189,7 @@ if __name__ == "__main__":
     test_input_validation()
     test_numpy_array_input()
     test_interpolation_demonstration()
+    test_small_sample()
 
     print("\n" + "=" * 60)
     print("所有测试通过! ✓")

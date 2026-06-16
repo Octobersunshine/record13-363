@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from typing import List, Union, Optional
 
 
@@ -42,6 +43,20 @@ class QuantileService:
 
         data_arr = np.asarray(data, dtype=float)
         sorted_data = np.sort(data_arr)
+        n = len(sorted_data)
+
+        if n < 2:
+            warnings.warn(
+                f"Sample size is {n} (< 2). Interpolation is not meaningful; "
+                f"returning the original value directly.",
+                UserWarning,
+                stacklevel=2,
+            )
+            single_val = float(sorted_data[0])
+            if isinstance(quantiles, (list, np.ndarray)):
+                q_arr = np.atleast_1d(np.asarray(quantiles, dtype=float))
+                return np.full(q_arr.shape, single_val)
+            return single_val
 
         if method == "linear":
             return self._linear_interpolation(sorted_data, quantiles)
