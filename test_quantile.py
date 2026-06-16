@@ -1,6 +1,12 @@
 import warnings
 import numpy as np
-from quantile_service import QuantileService, compute_quantile
+from quantile_service import (
+    QuantileService,
+    compute_quantile,
+    compute_quantile_batch,
+    compute_quantile_multi_method,
+    compute_five_number_summary,
+)
 
 
 def test_basic_quantiles():
@@ -182,6 +188,116 @@ def test_small_sample():
     print("\n✓ 小样本测试通过")
 
 
+def test_compute_batch():
+    print("\n" + "=" * 60)
+    print("测试8: compute_batch - 返回分位点-值字典映射")
+    print("=" * 60)
+
+    qs = QuantileService()
+    data = list(range(1, 11))
+    quantiles = [0.1, 0.25, 0.5, 0.75, 0.9]
+
+    result = qs.compute_batch(data, quantiles, method="linear")
+    print(f"\n输入数据: {data}")
+    print(f"分位点列表: {quantiles}")
+    print("结果 (linear):")
+    for q, v in result.items():
+        np_v = np.percentile(data, q * 100, method="linear")
+        print(f"  q={q:<4g}: {v:<6.3f}  (NumPy: {np_v:<6.3f})")
+        assert abs(v - np_v) < 1e-10
+
+    assert set(result.keys()) == set(float(q) for q in quantiles)
+
+    try:
+        qs.compute_batch(data, 0.5)
+        assert False, "应该对单个分位点抛出 TypeError"
+    except TypeError as e:
+        print(f"\n✓ 单分位点类型检测: {e}")
+
+    fn_result = compute_quantile_batch(data, quantiles, method="midpoint")
+    for q, v in fn_result.items():
+        np_v = np.percentile(data, q * 100, method="midpoint")
+        assert abs(v - np_v) < 1e-10
+    print("✓ compute_quantile_batch 便捷函数通过")
+
+    print("\n✓ compute_batch 测试通过")
+
+
+def test_compute_multi_method():
+    print("\n" + "=" * 60)
+    print("测试9: compute_multi_method - 多种插值方法同时计算")
+    print("=" * 60)
+
+    qs = QuantileService()
+    data = list(range(1, 11))
+    quantiles = [0.25, 0.5, 0.75]
+
+    result = qs.compute_multi_method(data, quantiles)
+    print(f"\n输入数据: {data}")
+    print(f"分位点: {quantiles}")
+    for method in ["linear", "midpoint", "nearest"]:
+        np_v = np.percentile(data, [q * 100 for q in quantiles], method=method)
+        our_v = result[method]
+        print(f"\n{method}:")
+        print(f"  我们:    {our_v}")
+        print(f"  NumPy:  {np_v}")
+        assert np.allclose(our_v, np_v)
+    assert set(result.keys()) == {"linear", "midpoint", "nearest"}
+
+    subset = qs.compute_multi_method(data, 0.5, methods=["linear", "nearest"])
+    print(f"\n子集方法 q=0.5: linear={subset['linear']}, nearest={subset['nearest']}")
+    assert subset["linear"] == 5.5
+    assert subset["nearest"] == 5.0
+
+    try:
+        qs.compute_multi_method(data, 0.5, methods=["linear", "invalid"])
+        assert False, "应该对无效方法抛出 ValueError"
+    except ValueError as e:
+        print(f"\n✓ 无效方法检测: {e}")
+
+    fn_result = compute_quantile_multi_method(data, quantiles)
+    for m in ["linear", "midpoint", "nearest"]:
+        assert np.allclose(fn_result[m], result[m])
+    print("✓ compute_quantile_multi_method 便捷函数通过")
+
+    print("\n✓ compute_multi_method 测试通过")
+
+
+def test_five_number_summary():
+    print("\n" + "=" * 60)
+    print("测试10: compute_five_number_summary - 五数概括")
+    print("=" * 60)
+
+    qs = QuantileService()
+    data = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]
+    sorted_data = sorted(data)
+    print(f"\n输入数据: {data}")
+    print(f"排序后:  {sorted_data}")
+
+    for method in ["linear", "midpoint", "nearest"]:
+        result = qs.compute_five_number_summary(data, method=method)
+        print(f"\n方法 {method}:")
+        for label, v in result.items():
+            print(f"  {label:<7s}: {v}")
+        np_min = np.percentile(data, 0, method=method)
+        np_q1 = np.percentile(data, 25, method=method)
+        np_med = np.percentile(data, 50, method=method)
+        np_q3 = np.percentile(data, 75, method=method)
+        np_max = np.percentile(data, 100, method=method)
+        assert result["min"] == np_min
+        assert abs(result["q1"] - np_q1) < 1e-10
+        assert abs(result["median"] - np_med) < 1e-10
+        assert abs(result["q3"] - np_q3) < 1e-10
+        assert result["max"] == np_max
+
+    fn_result = compute_five_number_summary(data, method="linear")
+    class_result = qs.compute_five_number_summary(data, method="linear")
+    assert fn_result == class_result
+    print("\n✓ compute_five_number_summary 便捷函数通过")
+
+    print("\n✓ 五数概括测试通过")
+
+
 if __name__ == "__main__":
     test_basic_quantiles()
     test_single_quantile()
@@ -190,6 +306,9 @@ if __name__ == "__main__":
     test_numpy_array_input()
     test_interpolation_demonstration()
     test_small_sample()
+    test_compute_batch()
+    test_compute_multi_method()
+    test_five_number_summary()
 
     print("\n" + "=" * 60)
     print("所有测试通过! ✓")

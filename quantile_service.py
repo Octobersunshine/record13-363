@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict
 
 
 class QuantileService:
@@ -109,6 +109,49 @@ class QuantileService:
             return float(result[0])
         return result
 
+    def compute_batch(
+        self,
+        data: Union[List[float], np.ndarray],
+        quantiles: Union[List[float], np.ndarray],
+        method: str = "linear",
+    ) -> Dict[float, float]:
+        if not isinstance(quantiles, (list, np.ndarray)):
+            raise TypeError(
+                "quantiles must be a list or ndarray for batch computation. "
+                "Use compute() for a single quantile."
+            )
+        quantiles_arr = np.asarray(quantiles, dtype=float)
+        values = self.compute(data, quantiles_arr, method=method)
+        return {float(q): float(v) for q, v in zip(quantiles_arr, values)}
+
+    def compute_multi_method(
+        self,
+        data: Union[List[float], np.ndarray],
+        quantiles: Union[float, List[float], np.ndarray],
+        methods: Optional[Union[List[str], np.ndarray]] = None,
+    ) -> Dict[str, Union[float, np.ndarray]]:
+        if methods is None:
+            methods_list = list(self._valid_methods)
+        else:
+            methods_list = list(methods)
+            for m in methods_list:
+                if m not in self._valid_methods:
+                    raise ValueError(
+                        f"Invalid interpolation method '{m}'. "
+                        f"Must be one of: {', '.join(sorted(self._valid_methods))}"
+                    )
+        return {m: self.compute(data, quantiles, method=m) for m in methods_list}
+
+    def compute_five_number_summary(
+        self,
+        data: Union[List[float], np.ndarray],
+        method: str = "linear",
+    ) -> Dict[str, float]:
+        summary_qs = [0.0, 0.25, 0.5, 0.75, 1.0]
+        labels = ["min", "q1", "median", "q3", "max"]
+        result = self.compute_batch(data, summary_qs, method=method)
+        return {label: result[q] for label, q in zip(labels, summary_qs)}
+
 
 def compute_quantile(
     data: Union[List[float], np.ndarray],
@@ -117,3 +160,29 @@ def compute_quantile(
 ) -> Union[float, np.ndarray]:
     service = QuantileService()
     return service.compute(data, quantiles, method)
+
+
+def compute_quantile_batch(
+    data: Union[List[float], np.ndarray],
+    quantiles: Union[List[float], np.ndarray],
+    method: str = "linear",
+) -> Dict[float, float]:
+    service = QuantileService()
+    return service.compute_batch(data, quantiles, method)
+
+
+def compute_quantile_multi_method(
+    data: Union[List[float], np.ndarray],
+    quantiles: Union[float, List[float], np.ndarray],
+    methods: Optional[Union[List[str], np.ndarray]] = None,
+) -> Dict[str, Union[float, np.ndarray]]:
+    service = QuantileService()
+    return service.compute_multi_method(data, quantiles, methods)
+
+
+def compute_five_number_summary(
+    data: Union[List[float], np.ndarray],
+    method: str = "linear",
+) -> Dict[str, float]:
+    service = QuantileService()
+    return service.compute_five_number_summary(data, method)
